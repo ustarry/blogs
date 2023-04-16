@@ -1,0 +1,416 @@
+<!DOCTYPE html><html lang="en" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"><title>探索Windows：探索Windows内核对象进程 | Starlight Studio</title><meta name="author" content="Starlight Explorer"><meta name="copyright" content="Starlight Explorer"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="让我们与星光探索者一起，探索Windows吧! 再次探索Windows应用程序进程由以下两部分构成：  一个内核对象，操作系统用于管理进程  一个地址空间，包含所有可执行文件或DLL模块的代码和数据，以及动态内存分配。   进程是有惰性的，进程要做的事情，必须让一个线程在他的上下文中运行，该线程负责执行进程空间包含的代码。一个进程可以有多个线程，所有线程都在进程的地址空间“同时”执行代码。为此，每">
+<meta property="og:type" content="article">
+<meta property="og:title" content="探索Windows：探索Windows内核对象进程">
+<meta property="og:url" content="http://ustarry.github.io/blogs/posts/windows/pf1b6fecfeb59.html">
+<meta property="og:site_name" content="Starlight Studio">
+<meta property="og:description" content="让我们与星光探索者一起，探索Windows吧! 再次探索Windows应用程序进程由以下两部分构成：  一个内核对象，操作系统用于管理进程  一个地址空间，包含所有可执行文件或DLL模块的代码和数据，以及动态内存分配。   进程是有惰性的，进程要做的事情，必须让一个线程在他的上下文中运行，该线程负责执行进程空间包含的代码。一个进程可以有多个线程，所有线程都在进程的地址空间“同时”执行代码。为此，每">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg">
+<meta property="article:published_time" content="2023-04-05T00:10:00.000Z">
+<meta property="article:modified_time" content="2023-04-16T04:16:03.980Z">
+<meta property="article:author" content="Starlight Explorer">
+<meta property="article:tag" content="windows">
+<meta property="article:tag" content="programming">
+<meta property="article:tag" content="GUI">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg"><link rel="shortcut icon" href="https://ustarry.github.io/image/starlight_avator.png"><link rel="canonical" href="http://ustarry.github.io/blogs/posts/windows/pf1b6fecfeb59.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/blogs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.min.css" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = { 
+  root: '/blogs/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlighjs","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false},
+  copy: {
+    success: 'Copy successfully',
+    error: 'Copy error',
+    noSupport: 'The browser does not support'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  date_suffix: {
+    just: 'Just',
+    min: 'minutes ago',
+    hour: 'hours ago',
+    day: 'days ago',
+    month: 'months ago'
+  },
+  copyright: undefined,
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  source: {
+    justifiedGallery: {
+      js: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.js',
+      css: 'https://cdn.jsdelivr.net/npm/flickr-justified-gallery/dist/fjGallery.min.css'
+    }
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  }
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '探索Windows：探索Windows内核对象进程',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2023-04-16 12:16:03'
+}</script><noscript><style type="text/css">
+  #nav {
+    opacity: 1
+  }
+  .justified-gallery img {
+    opacity: 1
+  }
+
+  #recent-posts time,
+  #post-meta time {
+    display: inline !important
+  }
+</style></noscript><script>(win=>{
+    win.saveToLocal = {
+      set: function setWithExpiry(key, value, ttl) {
+        if (ttl === 0) return
+        const now = new Date()
+        const expiryDay = ttl * 86400000
+        const item = {
+          value: value,
+          expiry: now.getTime() + expiryDay,
+        }
+        localStorage.setItem(key, JSON.stringify(item))
+      },
+
+      get: function getWithExpiry(key) {
+        const itemStr = localStorage.getItem(key)
+
+        if (!itemStr) {
+          return undefined
+        }
+        const item = JSON.parse(itemStr)
+        const now = new Date()
+
+        if (now.getTime() > item.expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return item.value
+      }
+    }
+  
+    win.getScript = url => new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = url
+      script.async = true
+      script.onerror = reject
+      script.onload = script.onreadystatechange = function() {
+        const loadState = this.readyState
+        if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+        script.onload = script.onreadystatechange = null
+        resolve()
+      }
+      document.head.appendChild(script)
+    })
+  
+    win.getCSS = url => new Promise((resolve, reject) => {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = url
+      link.onload = () => resolve()
+      link.onerror = () => reject()
+      document.head.appendChild(link)
+    })
+  
+      win.activateDarkMode = function () {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      win.activateLightMode = function () {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+      const t = saveToLocal.get('theme')
+    
+          if (t === 'dark') activateDarkMode()
+          else if (t === 'light') activateLightMode()
+        
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+    const detectApple = () => {
+      if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+    })(window)</script><meta name="generator" content="Hexo 6.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://ustarry.github.io/image/starlight_avator.png" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/blogs/archives/"><div class="headline">Articles</div><div class="length-num">15</div></a><a href="/blogs/tags/"><div class="headline">Tags</div><div class="length-num">7</div></a><a href="/blogs/categories/"><div class="headline">Categories</div><div class="length-num">5</div></a></div><hr/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/blogs/"><i class="fa-fw fas fa-home"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/blogs/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/blogs/tags/"><i class="fa-fw fas fa-tags"></i><span> Tags</span></a></div><div class="menus_item"><a class="site-page" href="/blogs/categories/"><i class="fa-fw fas fa-folder-open"></i><span> Categories</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://s1.ax1x.com/2023/01/13/pSKERtU.jpg')"><nav id="nav"><span id="blog-info"><a href="/blogs/" title="Starlight Studio"><span class="site-name">Starlight Studio</span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/blogs/"><i class="fa-fw fas fa-home"></i><span> Home</span></a></div><div class="menus_item"><a class="site-page" href="/blogs/archives/"><i class="fa-fw fas fa-archive"></i><span> Archives</span></a></div><div class="menus_item"><a class="site-page" href="/blogs/tags/"><i class="fa-fw fas fa-tags"></i><span> Tags</span></a></div><div class="menus_item"><a class="site-page" href="/blogs/categories/"><i class="fa-fw fas fa-folder-open"></i><span> Categories</span></a></div></div><div id="toggle-menu"><a class="site-page" href="javascript:void(0);"><i class="fas fa-bars fa-fw"></i></a></div></div></nav><div id="post-info"><h1 class="post-title">探索Windows：探索Windows内核对象进程</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">Created</span><time class="post-meta-date-created" datetime="2023-04-05T00:10:00.000Z" title="Created 2023-04-05 08:10:00">2023-04-05</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">Updated</span><time class="post-meta-date-updated" datetime="2023-04-16T04:16:03.980Z" title="Updated 2023-04-16 12:16:03">2023-04-16</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/blogs/categories/windows/">windows</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="探索Windows：探索Windows内核对象进程"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">Post View:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><p>让我们与星光探索者一起，探索Windows吧!</p>
+<h2 id="再次探索Windows应用程序"><a href="#再次探索Windows应用程序" class="headerlink" title="再次探索Windows应用程序"></a>再次探索Windows应用程序</h2><p>进程由以下两部分构成：</p>
+<ul>
+<li><p>一个内核对象，操作系统用于管理进程</p>
+</li>
+<li><p>一个地址空间，包含所有可执行文件或DLL模块的代码和数据，以及动态内存分配。</p>
+</li>
+</ul>
+<p>进程是有惰性的，进程要做的事情，必须让一个线程在他的上下文中运行，该线程负责执行进程空间包含的代码。一个进程可以有多个线程，所有线程都在进程的地址空间“同时”执行代码。为此，<strong>每个线程都有他自己的一组CPU寄存器和它自己的堆栈，每个进程至少有一个线程执行进程地址空间包含的代码。当系统创建一个进程的时候，会自动为进程创建第一个线程，这即为主线程(main thread)。</strong> 如果没有线程要执行进程地址空间包含的代码，进程失去了继续存在的理由，这是系统就会自动销毁进程及其地址空间。</p>
+<p>对于所有要运行的线程，<strong>操作系统会轮流给每个线程调度一些CPU时间，采用循环（round-robin，轮询或轮流）方式，为每个线程分配时间片（quantum，称为“量”或“量程”），从而营造出所有线程都在同时运行的假象。</strong> 如果计算机配备了多个CPU，操作系统会采用更复杂的算法为线程分配CPU时间，Microsoft Windows可以同时让不同的CPU执行不同的线程，使得多个线程可以真正并发运行，此时Windows内核负责线程所有管理和调度任务。当然，为了更好的利用这些CPU，我们需要在算法上多下功夫。</p>
+<h3 id="Windows应用程序类型再认识"><a href="#Windows应用程序类型再认识" class="headerlink" title="Windows应用程序类型再认识"></a>Windows应用程序类型再认识</h3><p><strong>Windows支持两种类型的应用程序：GUI(Graphical User Interface，图形用户界面)，和CUI(Console User Interface，控制台用户界面)。</strong> 我们现在常用的程序都是GUI程序，是图形化的，有窗口，有菜单，有对话框。而控制台程序是基于文本的，一般不会创建窗口或进程消息（当然可以创建窗口），虽然CUI程序是在屏幕中的一个窗口运行的，但这个窗口只有文本，例如命令提示符(CMD.EXE)。</p>
+<p>用Microsoft Visual Studio创建应用程序时，这个IDE会设置链接器开关，使源代码可以正确生成可执行文件中。对于CUI程序，这个链接器开关为&#x2F;SUBSYSTEM:CONSOLE，对于GUI程序，则为&#x2F;SUBSYSTEM:WINDOWS。用户在运行应用程序时，操作系统的加载程序(loader)会检查执行文件影响的文件头，并获得这个子系统值，如果此值表明为CUI程序，加载程序会确保有一个控制台可以使用，若有必要会创建一个；如果表明为GUI程序，则只会加载程序。</p>
+<h3 id="Windows应用程序深刻解读"><a href="#Windows应用程序深刻解读" class="headerlink" title="Windows应用程序深刻解读"></a>Windows应用程序深刻解读</h3><p>Windows应用程序必须有一个入口点函数，可以选择下列两种之一的入口函数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">INT WINAPI _tWinMain(</span><br><span class="line">    HINSTANCE hInstance,      <span class="comment">// 当前实例句柄</span></span><br><span class="line">    HINSTANCE hPrevInstance,  <span class="comment">// 上一个实例句柄，现在已废弃</span></span><br><span class="line">    PTSTR lpCmdLine,         <span class="comment">// 命令行参数</span></span><br><span class="line">    <span class="type">int</span> nCmdShow              <span class="comment">// 窗口显示方式</span></span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> _tmain(</span><br><span class="line">    <span class="type">int</span> argc,          <span class="comment">// 命令行参数个数</span></span><br><span class="line">    TCHAR *argv[],     <span class="comment">// 命令行参数数组</span></span><br><span class="line">    TCHAR *envp[]      <span class="comment">// 环境变量</span></span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+
+<p>实际上操作系统并不调用我们所写的入口点函数，而是会调用C&#x2F;C++运行库实现并在链接时使用-entry:命令行选择C&#x2F;C++运行时的启动函数，此函数初始化C&#x2F;C++运行时库，还确保了我们任何全局或竟然变量会被正确初始化。</p>
+<p>_tWinMain和_tmain实际上是宏定义，将会在编译时替换为正确的函数。</p>
+<table>
+<thead>
+<tr>
+<th>应用程序类型</th>
+<th>入口点函数（入口）</th>
+<th>嵌入可执行文件的启动函数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>多字节版本的GUI程序</td>
+<td>_tWinMain(WinMain)</td>
+<td>WinMainCRTStartup</td>
+</tr>
+<tr>
+<td>Unicode版本的GUI程序</td>
+<td>_tWinMain(WinMain)</td>
+<td>wWinMainCRTStartup</td>
+</tr>
+<tr>
+<td>多字节版本的GUI程序</td>
+<td>_tmain(main)</td>
+<td>mainCRTStartup</td>
+</tr>
+<tr>
+<td>Unicode版本的GUI程序</td>
+<td>_tmain(wmain)</td>
+<td>wmainCRTStartup</td>
+</tr>
+</tbody></table>
+<p>在链接可执行文件时，链接器会选择正确的C&#x2F;C++运行时库启动函数。开发者通常想制作一个GUI程序，后因为用Visual Studio创建项目时操作有误，导致报错unresolved external symbol(无法解析的外部符号)错误，提示找不到main函数。就是因为链接器开关为&#x2F;SUBSYSTEM:CONSOLE，即目的是控制台程序，这样的原因。</p>
+<p>我们只需在项目属性（之前的探索过程中介绍过如何打开这个窗口），修改SubSystem为WINDOWS即可。当然也可以通过这种方式改回来。</p>
+<p><img src="https://s1.ax1x.com/2023/04/05/pp5wmV0.png"></p>
+<p>所有C&#x2F;C++运行时库启动函数工作基本都是一样的。在Visual C++自带C运行库源代码，可在crtexe.c文件中看到四个启动函数源代码，主要做下列工作：</p>
+<ul>
+<li><p>获得指向新进程完整命令行的指针</p>
+</li>
+<li><p>获取指向新进程环境变量的指针</p>
+</li>
+<li><p>初始化C&#x2F;C++运行库全局变量</p>
+</li>
+<li><p>初始化C运行库内存分配函数和其他底层I&#x2F;O例程使用的堆</p>
+</li>
+<li><p>调用所有全局和静态C++类对象构造函数</p>
+</li>
+</ul>
+<p>各位小伙伴可能不知道例程是什么意思，实际上例程，过程，子程序都是函数的不同称呼，本质上还是函数。</p>
+<table>
+<thead>
+<tr>
+<th>变量名</th>
+<th>类型</th>
+<th>描述和推荐使用的Windows函数</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>_osver</td>
+<td>unsigned int</td>
+<td>操作系统的构建版本号，例如Windows Vista RTM为build 60000，则_osver值为6000，请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion">GetVersionEx函数</a></td>
+</tr>
+<tr>
+<td>_winmajor</td>
+<td>unsigned int</td>
+<td>以16进制表示的Windows系统主版本号，请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion">GetVersionEx函数</a></td>
+</tr>
+<tr>
+<td>_winminor</td>
+<td>unsigned int</td>
+<td>以16进制表示的Windows系统次版本号，请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion">GetVersionEx函数</a></td>
+</tr>
+<tr>
+<td>_winver</td>
+<td>unsigned int</td>
+<td>(_winmajor &lt;&lt; 8) + _winminor，请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion">GetVersionEx函数</a></td>
+</tr>
+<tr>
+<td>__argc</td>
+<td>unsigned int</td>
+<td>命令行参数个数，请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea">GetCommandLine</a></td>
+</tr>
+<tr>
+<td>__argv    __wargv</td>
+<td>char*[]</td>
+<td>长度为__argc的一个数组，其中数组每个元素指向命令行参数。如果定义了_UNICODE，__argv&#x3D;NULL，否则__wargv&#x3D;NULL。请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getcommandlinea">GetCommandLine</a></td>
+</tr>
+<tr>
+<td>_environ  _wenviron</td>
+<td>char*[]</td>
+<td>一个指针数组，数组每一项都指向一个环境字符串。如果定义了_UNICODE，_environ&#x3D;NULL，否则__wenviron&#x3D;NULL。请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getenvironmentvariable">GetEnvironmentVariable函数</a>或<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getenvironmentstrings">GetEnvironmentStrings函数</a></td>
+</tr>
+<tr>
+<td>_pgmptr  _wpgmptr</td>
+<td>char[]</td>
+<td>正在运行的程序名称及其完整路径。如果已经定义 _UNICODE，_pgmptr&#x3D;NULL，否则_wpgmptr&#x3D;NULL。请换用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamea">GetModuleFileName函数</a></td>
+</tr>
+</tbody></table>
+<p>完成初始化工作之后，C&#x2F;C++启动函数就会调用应用程序入口点函数，假如入口函数为WinMain，那么调用过程为：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">GetStartupInfo</span>(&amp;StartupInfo);</span><br><span class="line"><span class="type">int</span> nMainRetVal = <span class="built_in">WinMain</span>(</span><br><span class="line">    (HINSTANCE)&amp;__ImageBase, </span><br><span class="line">    <span class="literal">NULL</span>, pszCommandLineAnsi, </span><br><span class="line">    (StartupInfo.dwFlags &amp; STARTF_USESHOWWINDOW ? </span><br><span class="line">     StartupInfo.wSHowWindow : SW_SHOWEDFAULT);</span><br></pre></td></tr></table></figure>
+
+<p>__ImageBase是链接器定义的伪变量，表明可执行文件被映射到应用程序内存中的位置，即进程实例句柄。</p>
+<p>入口函数返回后，启动函数将调用C运行时库函数exit，向其传递返回值nMainRetVal，exit函数将：</p>
+<ul>
+<li><p>调用_onexit函数调用所注册的任何一个函数</p>
+</li>
+<li><p>调用所有全局和静态C++类对象的析构函数</p>
+</li>
+<li><p>在DEBUG模式下，如果设置了__CRTDBG_LEAK_CHECK_DF标志，则调用_CrtDumpMemoryLeaks函数生成内存泄露报告</p>
+</li>
+<li><p>调用操作系统ExitProcess函数，向其传入nMainRetVal，这会导致操作系统杀掉我们的进程，并设置退出代码。</p>
+</li>
+</ul>
+<p>下面对_tWinMain函数的四个参数进行更深一步的探索</p>
+<h3 id="进程实例句柄hInstance"><a href="#进程实例句柄hInstance" class="headerlink" title="进程实例句柄hInstance"></a>进程实例句柄hInstance</h3><p>_tWinMain的hInstance参数实际值实际上是一个内存基地址，系统将可执行文件的映像加载到进程空间的这个位置，如操作系统打开可执行文件并决定加载到地址0x00400000，那么hInstance值为0x00400000，</p>
+<p><strong>可执行文件映像具体加载到哪个基地址，由链接器决定，不同的链接器使用不同的默认基地址。</strong> 由于历史原因，VisualStudio链接器(LINK.EXE)使用默认基地址是0x00400000，这是运行Windows 98时，可执行文件的映像能加载到的最低的一个地址。使用LINK.EXE命令&#x2F;BASE:address，可修改加载的基地址位置。</p>
+<p>我们可以调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandlea">GetModuleHandle函数</a>或者调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulehandleexa">GetModuleHandleEx函数</a>得到可执行文件或DLL文件加载到底进程空间地址的位置。下方对GetModuleHandle函数的调用方式进行演示</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">HMODULE <span class="title">GetModuleHandle</span><span class="params">(PCTSTR pszModule)</span></span>;</span><br><span class="line"><span class="comment">// pszModule为已加载的可执行文件或DLL文件名称</span></span><br><span class="line"><span class="comment">// 如果系统找到了pszModule，就会返回它加载的基地址，否则返回NULL</span></span><br><span class="line"><span class="comment">// 给pszModule传入NULL，可返回主调进程可执行文件基地址，</span></span><br><span class="line"><span class="comment">// 当然也可以用伪变量 __ImageBase 获取主调进程可执行文件基地址</span></span><br></pre></td></tr></table></figure>
+
+<p>加载到进程地址空间的每一个可执行文件或DLL都被赋予了独一无二的实例句柄。在需要加载资源的函数调用中，一般我们都提供此句柄的值。因此我们一般使用一个全局变量保存下来，这样方便加载资源。</p>
+<p>此外，<strong>GetModuleHandle函数只会检查主调进程的地址空间</strong>，也就是说主调进程如果没有调用任何对话框函数，一旦调用GetModuleHandle，并传递ComDlg32就会返回NULL，即使ComDlg32.dll已经加载到其他进程。<strong>调用GetModuleHandle函数并向其传递NULL值，会返回进程的地址空间中的可执行文件的基地址</strong>，就算是调用GetModuleHandle(NULL)的代码在一个DLL中，返回值仍是可执行文件的基地址，而不是DLL的基地址。</p>
+<p>另外，<strong>HMODULE和HINSTANCE实际上完全是一回事，我们可以在需要HMODULE时传入一个HINSTANCE，反之亦然。</strong> 之所以有两种数据类型，是因为在16位Windows中他两表示不同类型数据，但现在表示的都相同了。</p>
+<h3 id="进程上一个实例的句柄hPrevInstance"><a href="#进程上一个实例的句柄hPrevInstance" class="headerlink" title="进程上一个实例的句柄hPrevInstance"></a>进程上一个实例的句柄hPrevInstance</h3><p>_tWinMain函数的第二个参数hPrevInstance是用于16位Windows程序的，现在为了兼容保留下来，因而这个参数总是为NULL。</p>
+<blockquote>
+<p>编程小技巧：对于未使用的参数，在Visual Studio我们可使用UNREFERENCED_PARAMETER 宏来消除警告，就像Qt程序可使用Q_UNUSED宏一样</p>
+</blockquote>
+<h3 id="进程的命令行lpCmdLine"><a href="#进程的命令行lpCmdLine" class="headerlink" title="进程的命令行lpCmdLine"></a>进程的命令行lpCmdLine</h3><p>系统在创建一个新进程时，会传一个命令行给他。命令行几乎是非空的，至少命令行的第一个参数即为可执行文件的名称。</p>
+<p><strong>进程仅能接收只由一个字符构成的命令行，因而我们不应该通过解析lpCmdLine参数来分析命令行</strong>，而是使用<code>PTSTR GetCommandLine()</code>函数，这个函数返回一个缓冲区指针，包含完整的命令行（包括可执行文件完整路径），并且总是返回同一个缓冲区的地址。因此，为了防止误修改命令行，我们通常把这个数据拷贝到本地的缓冲区，然后再解析命令行。</p>
+<p>许多应用程序都倾向于将命令行分割成一个一个单独的标记，但是Microsoft反对继续使用全局变量__argc和__argv，但应用程序仍然可以使用他们。我们可以利用ShellAPI.h头文件中声明并由Shell32.dll导出的函数<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-commandlinetoargvw">CommandLineToArgvW 函数</a>即可将任何Unicode字符串分割成单独的标记。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">LPWSTR* <span class="title">CommandLineToArgvW</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    LPCWSTR lpCmdLine, <span class="comment">// 指向命令行的字符串，通常为GetCommandLineW返回值</span></span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">int</span> *pNumArgs      <span class="comment">// 用于接收命令行中实参数目的地址</span></span></span></span><br><span class="line"><span class="params"><span class="function">)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>这个函数返回一个LPWSTR*数组的数据。CommandLineToArgvW在内部分配内存，因此我们可以不释放这块内存，由操作系统在进程终止时释放。如果想自己释放，应该调用HeapFree</p>
+<h3 id="进程的环境变量"><a href="#进程的环境变量" class="headerlink" title="进程的环境变量"></a>进程的环境变量</h3><p>每个进程都有一个与它关联的环境块(environment block)，这是在进程地址空间分配的一块内存，其中包含的字符串和下面类似：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">=::=::\ ...</span><br><span class="line">Var1=Value1\0</span><br><span class="line">Var2=Value2\0</span><br><span class="line">Var3=Value3\0</span><br><span class="line">VarN=ValueN\0</span><br><span class="line">\0</span><br></pre></td></tr></table></figure>
+
+<p><strong>每个字符串的第一部分是一个环境变量的名称，后跟一个等号，等号后是环境变量的值（如果有空格，包括空格部分）</strong>。除了第一个<code>=::=::\</code>字符串，可能还有其他字符串以等号开头，但这种字符串不作为环境变量使用。我们可以使用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-getenvironmentstrings">GetEnvironmentStrings 函数</a>获得这种完整的环境块，得到的环境块的格式与本段描述的完全一致。</p>
+<p>下面的一段代码展示了如何遍历输出所有的环境变量的值：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;windows.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;tchar.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> comment(lib, <span class="string">&quot;user32.lib&quot;</span>)</span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> _tmain()</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">// 获取环境变量字符串</span></span><br><span class="line">    LPTSTR lpEnvVars = <span class="built_in">GetEnvironmentStrings</span>();</span><br><span class="line">    LPTSTR lpCurVar = lpEnvVars;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (lpCurVar != <span class="literal">NULL</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">// 每一个环境变量字符串都以NULL结尾</span></span><br><span class="line">        <span class="keyword">while</span> (*lpCurVar)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">// 这一条判断是为了忽略=开头的字符串</span></span><br><span class="line">            <span class="keyword">if</span> (*lpCurVar != <span class="built_in">TEXT</span>(<span class="string">&#x27;=&#x27;</span>))</span><br><span class="line">            &#123;</span><br><span class="line">                _tprintf(<span class="built_in">TEXT</span>(<span class="string">&quot;%s\n&quot;</span>), lpCurVar);</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">// 移动指针到下一个字符串开头</span></span><br><span class="line">            lpCurVar += <span class="built_in">lstrlen</span>(lpCurVar) + <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 释放字符串缓冲区</span></span><br><span class="line">    <span class="built_in">FreeEnvironmentStrings</span>(lpEnvVars);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意，对于描述环境变量的字符串</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">VAR1=WINDOWS</span><br><span class="line">VAR2= WINDOWS</span><br></pre></td></tr></table></figure>
+
+<p>VAR1和VAR2会被认为是不同的环境变量</p>
+<p>用户在登录Windows时，系统创建外壳(shell)进程，系统通过检查注册表中的两个注册表项来获得初始的环境的字符串。</p>
+<p>第一个包含系统所有环境变量列表</p>
+<p>HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager</p>
+<p>第二个注册表项包含当前登录用户所有环境变量列表</p>
+<p>HKEY_CURRNET_USER\Environment</p>
+<p>用户可以自由修改。应用程序还可以使用各种注册表函数来修改这些注册表项，为了使改动对所有应用程序生效，用户必须注销并重新登陆，有些应用程序可以在其主窗口接收到WM_SETTINGCHANGE消息，用新的注册表项更新他们的环境块。如果我们在更新了注册表项后希望应用程序马上更新他们的环境块，可以进行如下调用：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">SendMessage</span>(HWND_BROADCAST, WM_SETTINGCHANGE, <span class="number">0</span>, </span><br><span class="line">            (LPARAM)<span class="built_in">TEXT</span>(<span class="string">&quot;Environment&quot;</span>));</span><br></pre></td></tr></table></figure>
+
+<p>上面还提到过，对于修改环境变量，可以使用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getenvironmentvariable">GetEnvironmentVariable函数</a>来获取环境变量</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DWORD <span class="title">GetEnvironmentVariable</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    LPCTSTR lpName,    <span class="comment">// 环境变量的名称</span></span></span></span><br><span class="line"><span class="params"><span class="function">    LPTSTR  lpBuffer,  <span class="comment">// 接收环境变量的缓冲区</span></span></span></span><br><span class="line"><span class="params"><span class="function">    DWORD   nSize      <span class="comment">// 缓冲区大小</span></span></span></span><br><span class="line"><span class="params"><span class="function">)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>如果lpBuffer为NULL，这个函数的返回值为需要的缓冲区大小。</p>
+<p>调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setenvironmentvariable">SetEnvironmentVariable函数</a>可以修改某个环境变量的值</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">BOOL <span class="title">SetEnvironmentVariable</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    LPCTSTR lpName,  <span class="comment">// 环境变量的名称 </span></span></span></span><br><span class="line"><span class="params"><span class="function">    LPCTSTR lpValue  <span class="comment">// 修改成的环境变量的值，</span></span></span></span><br><span class="line"><span class="params"><span class="function">                     <span class="comment">// 如果为NULL将删掉这个环境变量</span></span></span></span><br><span class="line"><span class="params"><span class="function">)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>在很多字符串的内部，都包含了“可替换字符串”，类似<code>%环境变量名%</code>的子串，即为可替换字符串，</p>
+<p>例如<code>PATH=%PATH%</code>，这个<code>%PATH%</code>即为可替换字符串</p>
+<p>我们可调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/processenv/nf-processenv-expandenvironmentstringsa">ExpandEnvironmentStrings函数</a>来将一个带有可替换字符串的的字符串，用环境变量值的实际内容替换相应位置。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DWORD <span class="title">ExpandEnvironmentStrings</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    LPCTSTR lpSrc,  <span class="comment">// 包含可替换字符串的字符串</span></span></span></span><br><span class="line"><span class="params"><span class="function">    LPTSTR  lpDst,  <span class="comment">// 接收替换结果的缓冲区，</span></span></span></span><br><span class="line"><span class="params"><span class="function">                    <span class="comment">// 如为NULL该函数返回值为需要的缓冲区大小</span></span></span></span><br><span class="line"><span class="params"><span class="function">    DWORD  nSize    <span class="comment">// 缓冲区大小</span></span></span></span><br><span class="line"><span class="params"><span class="function">)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>例如下列调用代码：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">LPTSTR lpBuffer = <span class="keyword">new</span> TCHAR[<span class="number">256</span>];</span><br><span class="line"><span class="built_in">ExpandEnvironmentStrings</span>(<span class="built_in">TEXT</span>(<span class="string">&quot;你的电脑环境变量OS的值：%OS%&quot;</span>), </span><br><span class="line">                         lpBuffer, <span class="number">256</span>);</span><br><span class="line"><span class="built_in">MessageBox</span>(<span class="literal">NULL</span>, lpBuffer, <span class="built_in">TEXT</span>(<span class="string">&quot;提示&quot;</span>), MB_OK);</span><br><span class="line"><span class="keyword">delete</span>[] lpBuffer;</span><br></pre></td></tr></table></figure>
+
+<p>在我的电脑环境变量OS的值为<code>WINDOWS_NT</code>，故lpBuffer的内容为<code>你的电脑环境变量OS的值：WINDOWS_NT</code></p>
+<h2 id="进程的其他特性"><a href="#进程的其他特性" class="headerlink" title="进程的其他特性"></a>进程的其他特性</h2><p>下面探索进程的其他特性</p>
+<h3 id="进程的关联性和进程的错误模式"><a href="#进程的关联性和进程的错误模式" class="headerlink" title="进程的关联性和进程的错误模式"></a>进程的关联性和进程的错误模式</h3><p>进程中的线程可以在主机任何CPU上运行，也可以强迫线程在可用CPU的一个子集上运行，这称为处理器关联性(processor affinity)，子进程继承其父进程的关联性。</p>
+<p>每个进程对于错误关联了一组标志，为了让系统知道进程如何响应严重错误。进程可调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-seterrormode">SetErrorMode函数</a>来告诉系统如何处理这些错误。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">UINT <span class="title">SetErrorMode</span><span class="params">(UINT fuErrorMode)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>fuErrorMode参数可以为下列及其按位的共同效果。</p>
+<table>
+<thead>
+<tr>
+<th>标志</th>
+<th>效果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SEM_FAILCRITICALERRORS</td>
+<td>系统不显示严重错误处理程序（critical-error-handler）消息框，并将错误返回主调进程</td>
+</tr>
+<tr>
+<td>SEM_NOGPFAULTERRORBOX</td>
+<td>系统不显示常规保护错误(general-protection-fault)消息框。此标志只应该由调试程序设置。该调试程序用一个异常处理程序来自行处理常规保护错误（general protection），即GP错误</td>
+</tr>
+<tr>
+<td>SEM_NOOPENFILERRORBOX</td>
+<td>系统查找文件失败时，不显示消息框</td>
+</tr>
+<tr>
+<td>SEM_NOALIGNMENTFAULTEXCEPT</td>
+<td>系统自动修复内存对其错误，并使应用程序看不到这些错误，对x86&#x2F;x64处理器无效。</td>
+</tr>
+</tbody></table>
+<p>默认情况下，子进程会继承父进程的错误模式标志，当然子进程不知道这一点，上文已经提到过很多东西子进程都不知道他自己继承下来的东西。</p>
+<h3 id="进程当前所在的驱动器和目录"><a href="#进程当前所在的驱动器和目录" class="headerlink" title="进程当前所在的驱动器和目录"></a>进程当前所在的驱动器和目录</h3><p>如果不提供完整路径名，Windows函数会在当前驱动器的当前目录查找文件和目录。例如调用CreateFile打开一个未指定完整路径名的文件，系统将在当前驱动器和目录查找相应文件。</p>
+<p>系统在内部跟踪记录这一个进程的当前驱动器和目录。这种信息是以进程为单位来维护的，因而假如进程中的一个线程修改了当前驱动器或目录，对于该进程的所有线程来说，此信息被更改了。</p>
+<p>一个线程可以调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getcurrentdirectory">GetCurrentDirectory函数</a>来获得进程当前所在的驱动器和目录。调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setcurrentdirectory">SetCurrentDirectory函数</a>修改之。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DWORD <span class="title">GetCurrentDirectory</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    DWORD  nBufferLength,   <span class="comment">// 缓冲区长度</span></span></span></span><br><span class="line"><span class="params"><span class="function">    LPTSTR lpBuffer         <span class="comment">// 缓冲区地址</span></span></span></span><br><span class="line"><span class="params"><span class="function">)</span></span>;</span><br><span class="line"></span><br><span class="line"><span class="function">BOOL <span class="title">SetCurrentDirectory</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    LPCTSTR lpPathName  <span class="comment">// 修改的路径</span></span></span></span><br><span class="line"><span class="params"><span class="function">)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>如果缓冲区不够大，GetCurrentDirectory函数返回所需要的字符数。在头文件<code>WinDef.h</code>头文件的<code>MAX_PATH</code>宏（定义为260）定义了目录文件或名称的最大字符数，因而我们通常准备一个有MAX_PATH大小的缓冲区来储存此数据。</p>
+<p>系统跟踪记录着进程当前驱动器和目录，但没有记录每个驱动器的当前目录。不过，Microsoft Windows的支持，可以处理多个驱动器的当前目录。这个支持是通过进程的环境字符串来提供的。如一个进程可以有如下的两个环境变量：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">=C:=C:\Codes</span><br><span class="line">=D:=D:\Program Files</span><br></pre></td></tr></table></figure>
+
+<p>上述变量指出进程在C驱动器的当前目录为\Codes，D驱动器当前目录为\Program Files。如果调用一个函数，并且传入的路径名限定的是当前驱动器以外的驱动器，系统会在进程的环境块中查找与指定驱动器号（也称盘符）相关的变量。如果找到了，系统就将变量的值当做当前目录使用，如果没找到，系统就假定指定驱动器的当前目录为它的根目录。</p>
+<p>如假定进程当前目录为C:&#x2F;Codes，我们调用CreateFile函数打开<code>D:README.md</code>文件，那么系统会查找环境变量<code>=D:</code>，由于在现在假设的情况该变量存在，则系统尝试在<code>D:\Program Files\</code>目录打开README.md文件，如果&#x3D;D:变量不存在，则系统尝试在D盘根目录打开README.md文件</p>
+<p>子进程的当前目录默认为每个驱动器的根目录，如果希望子进程继承父进程的当前目录，父进程必须在生成子进程之前，创建这些驱动器号环境变量，并添加到环境块中。父进程可调用<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfullpathnamea">GetFullPathName函数</a>获取。</p>
+<h3 id="进程的系统版本"><a href="#进程的系统版本" class="headerlink" title="进程的系统版本"></a>进程的系统版本</h3><p>很多时候，我们需要判断用户的Windows版本。在很长的时间内，Windows API仅提供了一个<code>DWORD GetVersion()</code>函数。这个函数具有悠久的历史，最初是为16位Windows系统设计的，此函数返回值高字节返回MS-DOS版本号，低字节返回Windows版本号。在每个字中，高位字节表示主版本号，低位字节表示次版本号。</p>
+<p>遗憾的是，写代码的程序员犯了一个错误，导致windows版本号顺序颠倒了。由于历史原因，微软没有废除这个函数，并添加了新的函数<a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversionexa">GetVersionExA</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">BOOL <span class="title">GetVersionEx</span><span class="params">(POSVERSIONINFOEX pVersionInformation)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p><a target="_blank" rel="noopener" href="https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-osversioninfoa">OSVERSIONINFOEX结构体</a>的定义如下</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="keyword">struct</span> <span class="title class_">_OSVERSIONINFOEX</span> &#123;</span><br><span class="line">  DWORD dwOSVersionInfoSize;  <span class="comment">// 这个结构体的size</span></span><br><span class="line">  DWORD dwMajorVersion;       <span class="comment">// 主版本号</span></span><br><span class="line">  DWORD dwMinorVersion;       <span class="comment">// 次版本号</span></span><br><span class="line">  DWORD dwBuildNumber;        <span class="comment">// 系统构件号</span></span><br><span class="line">  DWORD dwPlatformId;         <span class="comment">// 系统支持的平台</span></span><br><span class="line">  TCHAR szCSDVersion[<span class="number">128</span>];    <span class="comment">// 系统补丁包名称</span></span><br><span class="line">  WORD  wServicePackMajor;    <span class="comment">// 系统补丁包主版本</span></span><br><span class="line">  WORD  wServicePackMinor;    <span class="comment">// 系统补丁包次版本</span></span><br><span class="line">  WORD  wSuiteMask;           <span class="comment">// 标识系统上的程序组</span></span><br><span class="line">  BYTE  wProductType;         <span class="comment">// 标识系统类型</span></span><br><span class="line">  BYTE  wReserved;            <span class="comment">// 保留的参数</span></span><br><span class="line">&#125; OSVERSIONINFOEX, *POSVERSIONINFOEX, *LPOSVERSIONINFOEX;</span><br></pre></td></tr></table></figure>
+
+<p>我们需要自己初始化一个OSVERSIONINFOEX结构体，然后作为GetVersionEx的参数，这样就可以获取了。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta">Author: </span><span class="post-copyright-info"><a href="http://ustarry.github.io/blogs">Starlight Explorer</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta">Link: </span><span class="post-copyright-info"><a href="http://ustarry.github.io/blogs/posts/windows/pf1b6fecfeb59.html">http://ustarry.github.io/blogs/posts/windows/pf1b6fecfeb59.html</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta">Copyright Notice: </span><span class="post-copyright-info">All articles in this blog are licensed under <a target="_blank" rel="noopener" href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> unless stating additionally.</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/blogs/tags/windows/">windows</a><a class="post-meta__tags" href="/blogs/tags/programming/">programming</a><a class="post-meta__tags" href="/blogs/tags/GUI/">GUI</a></div><div class="post_share"><div class="social-share" data-image="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="prev-post pull-left"><a href="/blogs/posts/windows/pbce90bc36ce8.html" title="探索Windows：Windows错误处理和字符串处理"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="onerror=null;src='/blogs/img/404.jpg'" alt="cover of previous post"><div class="pagination-info"><div class="label">Previous Post</div><div class="prev_info">探索Windows：Windows错误处理和字符串处理</div></div></a></div><div class="next-post pull-right"><a href="/blogs/posts/windows/p19349a29417d.html" title="探索Windows：Windows内核对象初步探讨"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="onerror=null;src='/blogs/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">Next Post</div><div class="next_info">探索Windows：Windows内核对象初步探讨</div></div></a></div></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>Related Articles</span></div><div class="relatedPosts-list"><div><a href="/blogs/posts/windows/p94939f4d9192.html" title="探索Windows：创建自己的窗口和探索消息机制"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-02-12</div><div class="title">探索Windows：创建自己的窗口和探索消息机制</div></div></a></div><div><a href="/blogs/posts/windows/p71040f0575db.html" title="探索Windows：使用计时器和菜单，图标，光标等资源文件"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-02-12</div><div class="title">探索Windows：使用计时器和菜单，图标，光标等资源文件</div></div></a></div><div><a href="/blogs/posts/windows/p8cad54b0e5bf.html" title="探索Windows：处理常用的消息和自定义消息"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-02-12</div><div class="title">探索Windows：处理常用的消息和自定义消息</div></div></a></div><div><a href="/blogs/posts/windows/pd3e66887a323.html" title="探索Windows：常用基本数据类型和字符编码"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-02-12</div><div class="title">探索Windows：常用基本数据类型和字符编码</div></div></a></div><div><a href="/blogs/posts/windows/p88fd15a5c690.html" title="探索Windows：Windows错误处理和字符串处理"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-04-05</div><div class="title">探索Windows：Windows错误处理和字符串处理</div></div></a></div><div><a href="/blogs/posts/windows/pc190bf13eb0d.html" title="探索Windows：Windows错误处理和字符串处理"><img class="cover" src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" alt="cover"><div class="content is-center"><div class="date"><i class="far fa-calendar-alt fa-fw"></i> 2023-04-04</div><div class="title">探索Windows：Windows错误处理和字符串处理</div></div></a></div></div></div><hr/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> Comment</span></div><div id="comment-switch"><span class="first-comment">Livere</span><span class="switch-btn"></span><span class="second-comment"> Gitalk</span></div></div><div class="comment-wrap"><div><div id="lv-container" data-id="city" data-uid="MTAyMC81ODAzNy8zNDUwMA=="></div></div><div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://ustarry.github.io/image/starlight_avator.png" onerror="this.onerror=null;this.src='/blogs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Starlight Explorer</div><div class="author-info__description">Starlight Studio</div></div><div class="card-info-data site-data is-center"><a href="/blogs/archives/"><div class="headline">Articles</div><div class="length-num">15</div></a><a href="/blogs/tags/"><div class="headline">Tags</div><div class="length-num">7</div></a><a href="/blogs/categories/"><div class="headline">Categories</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/xxxxxx"><i class="fab fa-github"></i><span>Follow Me</span></a></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>Announcement</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>Catalog</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%86%8D%E6%AC%A1%E6%8E%A2%E7%B4%A2Windows%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F"><span class="toc-number">1.</span> <span class="toc-text">再次探索Windows应用程序</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Windows%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F%E7%B1%BB%E5%9E%8B%E5%86%8D%E8%AE%A4%E8%AF%86"><span class="toc-number">1.1.</span> <span class="toc-text">Windows应用程序类型再认识</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Windows%E5%BA%94%E7%94%A8%E7%A8%8B%E5%BA%8F%E6%B7%B1%E5%88%BB%E8%A7%A3%E8%AF%BB"><span class="toc-number">1.2.</span> <span class="toc-text">Windows应用程序深刻解读</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E5%AE%9E%E4%BE%8B%E5%8F%A5%E6%9F%84hInstance"><span class="toc-number">1.3.</span> <span class="toc-text">进程实例句柄hInstance</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E4%B8%8A%E4%B8%80%E4%B8%AA%E5%AE%9E%E4%BE%8B%E7%9A%84%E5%8F%A5%E6%9F%84hPrevInstance"><span class="toc-number">1.4.</span> <span class="toc-text">进程上一个实例的句柄hPrevInstance</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%9A%84%E5%91%BD%E4%BB%A4%E8%A1%8ClpCmdLine"><span class="toc-number">1.5.</span> <span class="toc-text">进程的命令行lpCmdLine</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%9A%84%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F"><span class="toc-number">1.6.</span> <span class="toc-text">进程的环境变量</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%9A%84%E5%85%B6%E4%BB%96%E7%89%B9%E6%80%A7"><span class="toc-number">2.</span> <span class="toc-text">进程的其他特性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%9A%84%E5%85%B3%E8%81%94%E6%80%A7%E5%92%8C%E8%BF%9B%E7%A8%8B%E7%9A%84%E9%94%99%E8%AF%AF%E6%A8%A1%E5%BC%8F"><span class="toc-number">2.1.</span> <span class="toc-text">进程的关联性和进程的错误模式</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E5%BD%93%E5%89%8D%E6%89%80%E5%9C%A8%E7%9A%84%E9%A9%B1%E5%8A%A8%E5%99%A8%E5%92%8C%E7%9B%AE%E5%BD%95"><span class="toc-number">2.2.</span> <span class="toc-text">进程当前所在的驱动器和目录</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9B%E7%A8%8B%E7%9A%84%E7%B3%BB%E7%BB%9F%E7%89%88%E6%9C%AC"><span class="toc-number">2.3.</span> <span class="toc-text">进程的系统版本</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>Recent Post</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/blogs/posts/windows/p88fd15a5c690.html" title="探索Windows：Windows错误处理和字符串处理"><img src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="this.onerror=null;this.src='/blogs/img/404.jpg'" alt="探索Windows：Windows错误处理和字符串处理"/></a><div class="content"><a class="title" href="/blogs/posts/windows/p88fd15a5c690.html" title="探索Windows：Windows错误处理和字符串处理">探索Windows：Windows错误处理和字符串处理</a><time datetime="2023-04-05T00:11:00.000Z" title="Created 2023-04-05 08:11:00">2023-04-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/blogs/posts/windows/pbce90bc36ce8.html" title="探索Windows：Windows错误处理和字符串处理"><img src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="this.onerror=null;this.src='/blogs/img/404.jpg'" alt="探索Windows：Windows错误处理和字符串处理"/></a><div class="content"><a class="title" href="/blogs/posts/windows/pbce90bc36ce8.html" title="探索Windows：Windows错误处理和字符串处理">探索Windows：Windows错误处理和字符串处理</a><time datetime="2023-04-05T00:10:05.000Z" title="Created 2023-04-05 08:10:05">2023-04-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/blogs/posts/windows/pf1b6fecfeb59.html" title="探索Windows：探索Windows内核对象进程"><img src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="this.onerror=null;this.src='/blogs/img/404.jpg'" alt="探索Windows：探索Windows内核对象进程"/></a><div class="content"><a class="title" href="/blogs/posts/windows/pf1b6fecfeb59.html" title="探索Windows：探索Windows内核对象进程">探索Windows：探索Windows内核对象进程</a><time datetime="2023-04-05T00:10:00.000Z" title="Created 2023-04-05 08:10:00">2023-04-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/blogs/posts/windows/p19349a29417d.html" title="探索Windows：Windows内核对象初步探讨"><img src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="this.onerror=null;this.src='/blogs/img/404.jpg'" alt="探索Windows：Windows内核对象初步探讨"/></a><div class="content"><a class="title" href="/blogs/posts/windows/p19349a29417d.html" title="探索Windows：Windows内核对象初步探讨">探索Windows：Windows内核对象初步探讨</a><time datetime="2023-04-04T01:20:00.000Z" title="Created 2023-04-04 09:20:00">2023-04-04</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/blogs/posts/windows/pc190bf13eb0d.html" title="探索Windows：Windows错误处理和字符串处理"><img src="https://s1.ax1x.com/2023/01/13/pSKERtU.jpg" onerror="this.onerror=null;this.src='/blogs/img/404.jpg'" alt="探索Windows：Windows错误处理和字符串处理"/></a><div class="content"><a class="title" href="/blogs/posts/windows/pc190bf13eb0d.html" title="探索Windows：Windows错误处理和字符串处理">探索Windows：Windows错误处理和字符串处理</a><time datetime="2023-04-04T01:15:00.000Z" title="Created 2023-04-04 09:15:00">2023-04-04</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div class="copyright">&copy;2023 By Starlight Explorer</div><div class="framework-info"><span>Framework </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo</a><span class="footer-separator">|</span><span>Theme </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly</a></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="Read Mode"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="Switch Between Light And Dark Mode"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="Toggle between single-column and double-column"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside_config" type="button" title="Setting"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="Table Of Contents"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="Scroll To Comments"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="Back To Top"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/blogs/js/utils.js"></script><script src="/blogs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox.umd.min.js"></script><div class="js-pjax"><script>function loadLivere () {
+  if (typeof LivereTower === 'object') {
+    window.LivereTower.init()
+  }
+  else {
+    (function(d, s) {
+        var j, e = d.getElementsByTagName(s)[0];
+        if (typeof LivereTower === 'function') { return; }
+        j = d.createElement(s);
+        j.src = 'https://cdn-city.livere.com/js/embed.dist.js';
+        j.async = true;
+        e.parentNode.insertBefore(j, e);
+    })(document, 'script');
+  }
+}
+
+if ('Livere' === 'Livere' || !true) {
+  if (true) btf.loadComment(document.getElementById('lv-container'), loadLivere)
+  else loadLivere()
+}
+else {
+  function loadOtherComment () {
+    loadLivere()
+  }
+}</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
