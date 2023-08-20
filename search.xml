@@ -265,35 +265,6 @@
     
     
     <entry>
-      <title>Vue的简单使用</title>
-      <link href="/blogs/posts/web/vue/pe9819f82c9f9.html"/>
-      <url>/blogs/posts/web/vue/pe9819f82c9f9.html</url>
-      
-        <content type="html"><![CDATA[<p>Vue (发音为 &#x2F;vjuː&#x2F;，类似 view) 是一款用于构建用户界面的 JavaScript 框架。它基于标准 HTML、CSS 和 JavaScript 构建，并提供了一套声明式的、组件化的编程模型，帮助你高效地开发用户界面。无论是简单还是复杂的界面，Vue 都可以胜任。</p><p>Vue 的特色</p><ul><li><p>易学易用<br>基于标准 HTML、CSS 和 JavaScript 构建，提供容易上手的 API 和一流的文档。</p></li><li><p>性能出色<br>经过编译器优化、完全响应式的渲染系统，几乎不需要手动优化。</p></li><li><p>灵活多变<br>丰富的、可渐进式集成的生态系统，可以根据应用规模在库和框架间切换自如。</p></li></ul><h2 id="书写第一个vue程序"><a href="#书写第一个vue程序" class="headerlink" title="书写第一个vue程序"></a>书写第一个vue程序</h2><p>为了使用vue，我们可以选择下载vue.js文件，然后用script标签引入，也可以使用现成的CDN</p><p>vue目前有Vue2，和Vue3两个大版本。vue2与vue3基本没有什么太大的变化，可放心使用。</p><blockquote><p>Vue2</p><p><a href="https://cdnjs.cloudflare.com/ajax/libs/vue/2.1.8/vue.min.js">https://cdnjs.cloudflare.com/ajax/libs/vue/2.1.8/vue.min.js</a></p><p><a href="https://cdn.staticfile.org/vue/2.2.2/vue.min.js">https://cdn.staticfile.org/vue/2.2.2/vue.min.js</a></p><p><a href="https://unpkg.com/vue@2.6.14/dist/vue.min.js">https://unpkg.com/vue@2.6.14/dist/vue.min.js</a></p><p>Vue3</p><p><a href="https://cdn.staticfile.org/vue/3.0.5/vue.global.js">https://cdn.staticfile.org/vue/3.0.5/vue.global.js</a></p><p><a href="https://unpkg.com/vue@next">https://unpkg.com/vue@next</a></p><p><a href="https://cdnjs.cloudflare.com/ajax/libs/vue/3.0.5/vue.global.js">https://cdnjs.cloudflare.com/ajax/libs/vue/3.0.5/vue.global.js</a></p></blockquote><p>本文使用Vue3</p><figure class="highlight html"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"></span><br></pre></td></tr></table></figure>]]></content>
-      
-      
-      <categories>
-          
-          <category> web </category>
-          
-          <category> vue </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> programming </tag>
-            
-            <tag> web </tag>
-            
-        </tags>
-      
-    </entry>
-    
-    
-    
-    <entry>
       <title>C++面向对象知识点总结</title>
       <link href="/blogs/posts/cplusplus/p46f9f8da9911.html"/>
       <url>/blogs/posts/cplusplus/p46f9f8da9911.html</url>
